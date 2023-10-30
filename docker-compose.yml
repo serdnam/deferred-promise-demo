@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:15
+    ports:
+      - ${DOCKER_PG_PORT:-5433}:5432
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=masterkey
+      - POSTGRES_USER=postgres
+      - PGDATA=/var/lib/postgresql/data
+      - POSTGRES_DB=test
+
+  waitpg:
+    image: postgres:15
+    links:
+      - postgres
+    depends_on:
+      - postgres
+    entrypoint:
+      - bash
+      - -c
+      - "until /usr/bin/pg_isready -h postgres -U postgres; do sleep 5; done"
+
+volumes:
+  pg_data:
+    driver: local
