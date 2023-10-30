@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { setTimeout } from 'node:timers/promises'
 import { createPool, sql } from "slonik"
 import type { StreamHandler } from 'slonik/dist/types.js';
+import { defer } from './utils/defer.js';
 
 type Series = { from: number, to: number, processFunc: (rows: any[]) => Promise<void> }
 
@@ -17,11 +18,12 @@ async function processRows(series: Series, rows: any[]) {
     await processFunc(rows)
 } 
 
-async function getStreamFunction(series: Series ,handler: StreamHandler<{ n: number}>) {
+async function getStreamFunction(series: Series ,promise: Promise<void>, handler: StreamHandler<{ n: number}>) {
     await pool.stream(sql.unsafe`
             SELECT generate_series AS n
             FROM generate_series(${series.from}::integer, ${series.to}::integer)
     `, handler)
+    await promise
 }
 
 try {
@@ -49,8 +51,9 @@ try {
 
     for (const series of seriesList) {
         const { from, to } = series
+        const { promise, resolve } = defer()
         console.log(chalk.bgHex('#0073e6').white.bold('Started processing series:'), { from, to })
-        await getStreamFunction(series , async function (stream) {
+        await getStreamFunction(series, promise, async function (stream) {
             const pendingRows = []
 
             for await (const row of stream) {
@@ -67,6 +70,7 @@ try {
                 pendingRows.length = 0
             }
 
+            resolve()
         })
         console.log(`${chalk.bgHex('#89ce00').hex('#000').bold('Finished processing for series:')}`, { from, to }, '\n')
     }
